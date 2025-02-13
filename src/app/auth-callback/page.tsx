@@ -9,7 +9,6 @@ import { Loader2 } from 'lucide-react'
 const Page = () => {
   const [configId, setConfigId] = useState<string | null>(null)
   const router = useRouter()
-
   useEffect(() => {
     const configurationId = localStorage.getItem('configurationId')
     if (configurationId) setConfigId(configurationId)
