@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import {Recursive} from "next/font/google"
+import { SpeedInsights } from "@vercel/speed-insights/next"
 import "./globals.css";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
@@ -23,6 +24,7 @@ export default function RootLayout({
       <body
         className={recursive.className}
       >
+        <SpeedInsights/>
         <Navbar />
         <main className="flex grainy-light flex-col min-h-[calc(100vh-3.5rem-1px)]">
           <div className="flex flex-1 flex-col h-full">
