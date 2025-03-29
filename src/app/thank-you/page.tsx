@@ -1,9 +1,12 @@
-import React from 'react'
+import { Suspense } from "react";
+import ThankYou from "./ThankYou";
 
-function page() {
+const Page = () => {
   return (
-    <div>page</div>
-  )
-}
+    <Suspense>
+      <ThankYou />
+    </Suspense>
+  );
+};
 
-export default page
+export default Page;
