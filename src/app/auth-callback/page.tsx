@@ -34,15 +34,14 @@ const Page = () => {  const [configId, setConfigId] = useState<string | null>(nu
         hasConfigId: !!configurationId
       }
     });
-    
-    // If we already have user info from Kinde client and a configId, redirect immediately
+      // If we already have user info from Kinde client and a configId, redirect immediately
     if (user && !isAuthLoading && configurationId) {
       logger.info('User already authenticated via Kinde client, redirecting to preview', {
         source: 'auth-callback',
         meta: { userId: user.id, configId: configurationId }
       });
       localStorage.removeItem('configurationId')
-      router.push(`/configure/preview?id=${configurationId}`)
+      router.replace(`/configure/preview?id=${configurationId}`)
       return
     }
   }, [user, isAuthLoading, router])
@@ -60,22 +59,22 @@ const Page = () => {  const [configId, setConfigId] = useState<string | null>(nu
     enabled: !user, // Only run query if we don't already have user from Kinde client
   })
   useEffect(() => {
-    if (data?.success) {
-      if (configId) {
+    if (data?.success) {      if (configId) {
         localStorage.removeItem('configurationId')
         console.log('Redirecting to preview with configId:', configId)
-        router.push(`/configure/preview?id=${configId}`)
+        // Use replace instead of push to avoid navigation history issues
+        router.replace(`/configure/preview?id=${configId}`)
       } else {
         console.log('No configId found, redirecting to home')
-        router.push('/')
+        router.replace('/')
       }
     }
   }, [data, configId, router])
-
   if (error) {
     console.error('Auth callback error:', error)
-    // Optionally redirect to login page or show error
-    // router.push('/api/auth/login')
+    // Handle auth errors by redirecting to login
+    localStorage.setItem('authErrorRedirect', 'true');
+    router.replace('/api/auth/login?post_login_redirect_url=/configure/preview')
   }
 
   return (

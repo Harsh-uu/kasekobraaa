@@ -94,10 +94,13 @@ const DesignConfigurator = ({
     console.log("Processed URL:", processedImageUrl);
   }, [imageUrl, processedImageUrl]);
   const {mutate: saveConfig, isPending} = useMutation({
-    mutationKey: ["save-config"],
-    mutationFn: async (args: SaveConfigArgs) => {
+    mutationKey: ["save-config"],    mutationFn: async (args: SaveConfigArgs) => {
       // First save the configuration to the database
       await _saveConfig(args);
+      
+      // Store config ID in both localStorage and sessionStorage for redundancy
+      localStorage.setItem("lastConfigId", configId);
+      sessionStorage.setItem("lastConfigId", configId);
       
       // Then process the image
       try {
@@ -114,10 +117,10 @@ const DesignConfigurator = ({
         description: "There was an error on our end. Please try again.",
         variant: "destructive"
       });
-    },
-    onSuccess: () => {
+    },    onSuccess: () => {
       console.log("Configuration saved successfully, redirecting to preview");
-      router.push(`/configure/preview?id=${configId}`);
+      // Use replace instead of push to avoid back button issues
+      router.replace(`/configure/preview?id=${configId}`);
     }
   })
 
@@ -491,20 +494,31 @@ const DesignConfigurator = ({
               </p>              <Button
               isLoading={isPending} 
               disabled={isPending}
-              loadingText="Saving"
-              onClick={() => {
+              loadingText="Saving"              onClick={() => {
                 console.log("Continue button clicked, saving configuration");
                 // Create a backup of the configuration ID for recovery if needed
                 localStorage.setItem("lastConfigId", configId);
+                sessionStorage.setItem("lastConfigId", configId);
+                localStorage.setItem("configurationId", configId);
+                sessionStorage.setItem("configurationId", configId);
                 
-                saveConfig({
-                  configId,
-                  color: options.color.value,
-                  finish: options.finish.value,
-                  material: options.material.value,
-                  model: options.model.value
-                });
-              }} 
+                try {
+                  saveConfig({
+                    configId,
+                    color: options.color.value,
+                    finish: options.finish.value,
+                    material: options.material.value,
+                    model: options.model.value
+                  });
+                } catch (error) {
+                  console.error("Error in saveConfig click handler:", error);
+                  toast({
+                    title: "Error saving configuration",
+                    description: "Please try again or refresh the page.",
+                    variant: "destructive"
+                  });
+                }
+              }}
               size="sm" 
               className="w-full">
                 Continue

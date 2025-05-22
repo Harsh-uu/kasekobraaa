@@ -12,6 +12,7 @@ const publicPaths = [
   '/auth-callback',
   '/configure/upload',
   '/configure/design',
+  '/configure/preview', // Add preview to public paths
   '/api/uploadthing',  // Add this line to allow uploadthing API
   '/api/webhooks',     // Add this line to allow webhook endpoints
   '/diagnostics',      // Image diagnostics page
@@ -26,15 +27,20 @@ const isPublicPath = (path: string) => {
   if (
     path.startsWith('/api/uploadthing') || 
     path.startsWith('/api/webhooks') ||
-    path.startsWith('/api/auth/kinde_callback') ||
+    path.startsWith('/api/auth') ||
     path.includes('kinde_callback')
   ) {
     return true;
   }
   
-  // Check if path starts with any of the public paths
+  // Check if path starts with any of the public paths, including query params
   return publicPaths.some(
-    (publicPath) => path.startsWith(publicPath) && publicPath !== '/'
+    (publicPath) => {
+      // Exact match or starts with path + /
+      return path === publicPath || 
+             path.startsWith(publicPath + '/') || 
+             path.startsWith(publicPath + '?');
+    }
   );
 };
 
@@ -73,6 +79,6 @@ export const config = {
      * - api/webhooks (Webhook endpoints)
      * - api/auth (Auth API routes including Kinde callbacks)
      */
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.ico|.*\\.svg|.*\\.png|.*\\.jpg|.*\\.jpeg|api/uploadthing|api/webhooks|api/auth/kinde_callback).*)',
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.ico|.*\\.svg|.*\\.png|.*\\.jpg|.*\\.jpeg|api/uploadthing|api/webhooks|api/auth).*)',
   ],
 };
