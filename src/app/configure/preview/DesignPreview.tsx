@@ -1,6 +1,7 @@
 "use client";
 
 import Phone from "@/components/Phone";
+import UTImage from "@/components/UTImage";
 import { Button } from "@/components/ui/button";
 import { BASE_PRICE, PRODUCT_PRICES } from "@/config/products";
 import { cn, formatPrice } from "@/lib/utils";
@@ -19,14 +20,22 @@ import { useToast } from "@/hooks/use-toast";
 const DesignPreview = ({ configuration }: { configuration: Configuration }) => {
   const router = useRouter();
   const { toast } = useToast();
-  const { id } = configuration;
-  const { user } = useKindeBrowserClient();
+  const { id } = configuration;  const { user, isLoading: isAuthLoading } = useKindeBrowserClient();
   const [isLoginModalOpen, setIsLoginModalOpen] = useState<boolean>(false);
+  const [authDebug, setAuthDebug] = useState<string>('');
 
   const [showConfetti, setShowConfetti] = useState<boolean>(false);
   useEffect(() => {
     setShowConfetti(true);
-  }, []);
+    // Debug auth state
+    console.log('Auth state:', { user, isAuthLoading });
+    setAuthDebug(JSON.stringify({ 
+      isAuthenticated: !!user, 
+      userId: user?.id,
+      email: user?.email,
+      isLoading: isAuthLoading 
+    }, null, 2));
+  }, [user, isAuthLoading]);
 
   const { color, model, finish, material } = configuration;
 
@@ -58,13 +67,28 @@ const DesignPreview = ({ configuration }: { configuration: Configuration }) => {
       });
     },
   });
-
-  const handleCheckout = () => {
+  const handleCheckout = async () => {
+    console.log('Checkout clicked, auth state:', { user, isAuthLoading });
+    
+    if (isAuthLoading) {
+      toast({
+        title: "Please wait",
+        description: "We're checking your authentication status...",
+        variant: "default",
+      });
+      return;
+    }
+    
     if (user) {
-      // create payment session
+      // User is authenticated, create payment session
+      toast({
+        title: "Processing",
+        description: "Creating your checkout session...",
+      });
       createPaymentSession({ configId: id });
     } else {
-      // need to log in
+      // User needs to log in
+      console.log('User not authenticated, opening login modal');
       localStorage.setItem("configurationId", id);
       setIsLoginModalOpen(true);
     }
@@ -80,16 +104,26 @@ const DesignPreview = ({ configuration }: { configuration: Configuration }) => {
           active={showConfetti}
           config={{ elementCount: 200, spread: 90 }}
         />
-      </div>
+      </div>      <LoginModal isOpen={isLoginModalOpen} setIsOpen={setIsLoginModalOpen} />
 
-      <LoginModal isOpen={isLoginModalOpen} setIsOpen={setIsLoginModalOpen} />
+      {process.env.NODE_ENV === "development" && (
+        <div className="fixed top-20 right-4 bg-gray-100 p-4 rounded-md shadow-md z-50 max-w-xs overflow-auto text-xs">
+          <h4 className="font-bold mb-2">Auth Debug:</h4>
+          <pre>{authDebug}</pre>
+        </div>
+      )}
 
-      <div className="mt-20 flex flex-col items-center md:grid text-sm sm:grid-cols-12 sm:grid-rows-1 sm:gap-x-6 md:gap-x-8 lg:gap-x-12">
-        <div className="md:col-span-4 lg:col-span-3 md:row-span-2 md:row-end-2">
+      <div className="mt-20 flex flex-col items-center md:grid text-sm sm:grid-cols-12 sm:grid-rows-1 sm:gap-x-6 md:gap-x-8 lg:gap-x-12">        <div className="md:col-span-4 lg:col-span-3 md:row-span-2 md:row-end-2">
           <Phone
             className={cn(`bg-${tw}`, "max-w-[150px] md:max-w-full")}
-            imgSrc={configuration.croppedImageUrl!}
+            imgSrc={configuration.croppedImageUrl || ''}
           />
+          {/* Debug info for image in production */}
+          {process.env.NODE_ENV === "development" && (
+            <div className="mt-2 text-xs bg-gray-50 p-2 rounded">
+              <div>Image URL: {configuration.croppedImageUrl?.substring(0, 30)}...</div>
+            </div>
+          )}
         </div>
 
         <div className="mt-6 sm:col-span-9 md:row-end-1">

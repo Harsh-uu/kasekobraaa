@@ -5,29 +5,63 @@ import { useEffect, useState } from 'react'
 import { getAuthStatus } from './actions'
 import { useRouter } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
+import { useKindeBrowserClient } from '@kinde-oss/kinde-auth-nextjs'
 
 const Page = () => {
   const [configId, setConfigId] = useState<string | null>(null)
   const router = useRouter()
+  const { user, isLoading: isAuthLoading } = useKindeBrowserClient()
+  const [debugInfo, setDebugInfo] = useState<string>('')
+
   useEffect(() => {
     const configurationId = localStorage.getItem('configurationId')
     if (configurationId) setConfigId(configurationId)
-  }, [])
+    
+    // Debug info
+    setDebugInfo(JSON.stringify({
+      user: user ? { id: user.id, email: user.email } : null,
+      isAuthLoading,
+      configId: configurationId || null,
+      time: new Date().toISOString(),
+    }, null, 2))
+    
+    // If we already have user info from Kinde client and a configId, redirect immediately
+    if (user && !isAuthLoading && configurationId) {
+      console.log('User already authenticated via Kinde client, redirecting to preview')
+      localStorage.removeItem('configurationId')
+      router.push(`/configure/preview?id=${configurationId}`)
+      return
+    }
+  }, [user, isAuthLoading, router])
 
-  const { data } = useQuery({
+  const { data, error, isLoading } = useQuery({
     queryKey: ['auth-callback'],
     queryFn: async () => await getAuthStatus(),
-    retry: true,
+    retry: (failureCount, error) => {
+      if (failureCount >= 3) return false
+      if (error?.message?.includes('Invalid user data')) return true
+      return false
+    },
     retryDelay: 500,
+    refetchOnWindowFocus: false,
+    enabled: !user, // Only run query if we don't already have user from Kinde client
   })
 
-  if (data?.success) {
-    if (configId) {
-      localStorage.removeItem('configurationId')
-      router.push(`/configure/preview?id=${configId}`)
-    } else {
-      router.push('/')
+  useEffect(() => {
+    if (data?.success) {
+      if (configId) {
+        localStorage.removeItem('configurationId')
+        router.push(`/configure/preview?id=${configId}`)
+      } else {
+        router.push('/')
+      }
     }
+  }, [data, configId, router])
+
+  if (error) {
+    console.error('Auth callback error:', error)
+    // Optionally redirect to login page or show error
+    // router.push('/api/auth/login')
   }
 
   return (
@@ -36,6 +70,12 @@ const Page = () => {
         <Loader2 className='h-8 w-8 animate-spin text-zinc-500' />
         <h3 className='font-semibold text-xl'>Logging you in...</h3>
         <p>You will be redirected automatically.</p>
+        
+        {process.env.NODE_ENV === 'development' && (
+          <div className='mt-8 p-4 bg-gray-100 rounded text-xs max-w-md overflow-auto'>
+            <pre>{debugInfo}</pre>
+          </div>
+        )}
       </div>
     </div>
   )

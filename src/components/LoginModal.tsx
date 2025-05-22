@@ -9,6 +9,7 @@ import {
 import Image from 'next/image'
 import { LoginLink, RegisterLink } from '@kinde-oss/kinde-auth-nextjs'
 import { buttonVariants } from './ui/button'
+import { useEffect, useState } from 'react'
 
 const LoginModal = ({
   isOpen,
@@ -17,6 +18,16 @@ const LoginModal = ({
   isOpen: boolean
   setIsOpen: Dispatch<SetStateAction<boolean>>
 }) => {
+  const [appHost, setAppHost] = useState<string>('');
+  
+  useEffect(() => {
+    // Dynamically determine the host (works in both dev and prod)
+    const host = window.location.origin;
+    setAppHost(host);
+  }, []);
+
+  const callbackUrl = `${appHost}/auth-callback`;
+
   return (
     <Dialog onOpenChange={setIsOpen} open={isOpen}>
       <DialogContent className='absolute z-[9999999]'>
@@ -41,10 +52,10 @@ const LoginModal = ({
         </DialogHeader>
 
         <div className='grid grid-cols-2 gap-6 divide-x divide-gray-200'>
-          <LoginLink className={buttonVariants({ variant: 'outline' })}>
+          <LoginLink className={buttonVariants({ variant: 'outline' })} postLoginRedirectURL={callbackUrl}>
             Login
           </LoginLink>
-          <RegisterLink className={buttonVariants({ variant: 'default' })}>
+          <RegisterLink className={buttonVariants({ variant: 'default' })} postLoginRedirectURL={callbackUrl}>
             Sign up
           </RegisterLink>
         </div>

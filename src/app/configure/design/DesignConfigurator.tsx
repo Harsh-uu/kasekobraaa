@@ -7,7 +7,7 @@ import { cn, formatPrice } from "@/lib/utils";
 import NextImage from "next/image";
 import { Rnd } from "react-rnd";
 import { RadioGroup } from "@headlessui/react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   COLORS,
   FINISHES,
@@ -29,6 +29,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useMutation } from "@tanstack/react-query";
 import { saveConfig as _saveConfig ,SaveConfigArgs } from "./actions";
 import { useRouter } from "next/navigation";
+import { getCorsProxyUrl, preloadImage } from "@/lib/image-utils";
 
 interface DesignConfiguratorProps {
   configId: string;
@@ -57,6 +58,41 @@ const DesignConfigurator = ({
 }: DesignConfiguratorProps) => {
   const { toast } = useToast();
   const router = useRouter();
+
+  // State to track image loading status
+  const [isImageLoaded, setIsImageLoaded] = useState(false);
+  const [processedImageUrl, setProcessedImageUrl] = useState(imageUrl);
+
+  // Preload image and handle any CORS issues
+  useEffect(() => {
+    const loadImage = async () => {
+      try {
+        setIsImageLoaded(false);
+        const corsUrl = getCorsProxyUrl(imageUrl);
+        setProcessedImageUrl(corsUrl);
+
+        await preloadImage(corsUrl);
+        console.log("Image preloaded successfully:", corsUrl);
+        setIsImageLoaded(true);
+      } catch (error) {
+        console.error("Failed to preload image:", error);
+        toast({
+          title: "Image loading issue",
+          description: "There was a problem loading your image. Please try again.",
+          variant: "destructive",
+        });
+      }
+    };
+
+    loadImage();
+  }, [imageUrl, toast]);
+
+  // Check if images are properly loaded in production
+  useEffect(() => {
+    console.log("Environment:", process.env.NODE_ENV);
+    console.log("Image URL:", imageUrl);
+    console.log("Processed URL:", processedImageUrl);
+  }, [imageUrl, processedImageUrl]);
 
   const {mutate: saveConfig, isPending} = useMutation({
     mutationKey: ["save-config"],
@@ -101,7 +137,6 @@ const DesignConfigurator = ({
   const containerRef = useRef<HTMLDivElement>(null);
 
   const { startUpload } = useUploadThing("imageUploader");
-
   async function saveConfiguration() {
     try {
       const {
@@ -123,12 +158,19 @@ const DesignConfigurator = ({
       const canvas = document.createElement("canvas");
       canvas.width = width;
       canvas.height = height;
-      const ctx = canvas.getContext("2d");
-
-      const userImage = new Image();
+      const ctx = canvas.getContext("2d");      const userImage = new Image();
       userImage.crossOrigin = "anonymous";
-      userImage.src = imageUrl;
-      await new Promise((resolve) => (userImage.onload = resolve));
+      userImage.src = processedImageUrl;
+      
+      console.log("Loading image from URL:", processedImageUrl);
+      
+      await new Promise((resolve, reject) => {
+        userImage.onload = resolve;
+        userImage.onerror = (e) => {
+          console.error("Error loading image:", e);
+          reject(new Error("Failed to load image"));
+        };
+      });
 
       ctx?.drawImage(
         userImage,
@@ -221,13 +263,23 @@ const DesignConfigurator = ({
             topRight: <HandleComponent />,
             topLeft: <HandleComponent />,
           }}
-        >
-          <div className="relative w-full h-full">
-            <NextImage
-              src={imageUrl}
-              fill
+        >          <div className="relative w-full h-full">
+            {/* Use regular img tag instead of NextImage to avoid optimization issues in production */}
+            <img
+              src={processedImageUrl}
               alt="your image"
-              className="pointer-events-none"
+              className="pointer-events-none w-full h-full object-cover"
+              crossOrigin="anonymous"
+              onError={(e) => {
+                console.error("Image failed to load in component:", e);
+                // Fallback to using NextImage if regular img fails
+                e.currentTarget.style.display = "none";
+                toast({
+                  title: "Image display issue",
+                  description: "There was a problem displaying your image. Please try refreshing.",
+                  variant: "destructive",
+                });
+              }}
             />
           </div>
         </Rnd>
