@@ -4,12 +4,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { isUploadThingUrl } from "@/lib/image-utils";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 
-/**
- * Debug page for testing image loading in production
- */
-export default function DiagnosticPage() {
+// Component that uses useSearchParams
+function DiagnosticContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   
@@ -159,5 +157,20 @@ export default function DiagnosticPage() {
         </Card>
       )}
     </div>
+  );
+}
+
+// Main page component with Suspense
+export default function DiagnosticPage() {
+  return (
+    <Suspense fallback={
+      <div className="container mx-auto py-10">
+        <div className="flex justify-center items-center min-h-[50vh]">
+          <div className="animate-spin h-12 w-12 border-4 border-primary border-t-transparent rounded-full"></div>
+        </div>
+      </div>
+    }>
+      <DiagnosticContent />
+    </Suspense>
   );
 }
