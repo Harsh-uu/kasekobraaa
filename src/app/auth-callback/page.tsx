@@ -6,13 +6,13 @@ import { getAuthStatus } from './actions'
 import { useRouter } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
 import { useKindeBrowserClient } from '@kinde-oss/kinde-auth-nextjs'
+import { logger } from '@/lib/logger'
 
-const Page = () => {
-  const [configId, setConfigId] = useState<string | null>(null)
+const Page = () => {  const [configId, setConfigId] = useState<string | null>(null)
   const router = useRouter()
   const { user, isLoading: isAuthLoading } = useKindeBrowserClient()
   const [debugInfo, setDebugInfo] = useState<string>('')
-
+  
   useEffect(() => {
     const configurationId = localStorage.getItem('configurationId')
     if (configurationId) setConfigId(configurationId)
@@ -25,9 +25,22 @@ const Page = () => {
       time: new Date().toISOString(),
     }, null, 2))
     
+    // Log auth events for diagnostics
+    logger.info('Auth callback mounted', {
+      source: 'auth-callback',
+      meta: {
+        hasUser: !!user,
+        isLoading: isAuthLoading,
+        hasConfigId: !!configurationId
+      }
+    });
+    
     // If we already have user info from Kinde client and a configId, redirect immediately
     if (user && !isAuthLoading && configurationId) {
-      console.log('User already authenticated via Kinde client, redirecting to preview')
+      logger.info('User already authenticated via Kinde client, redirecting to preview', {
+        source: 'auth-callback',
+        meta: { userId: user.id, configId: configurationId }
+      });
       localStorage.removeItem('configurationId')
       router.push(`/configure/preview?id=${configurationId}`)
       return
@@ -46,13 +59,14 @@ const Page = () => {
     refetchOnWindowFocus: false,
     enabled: !user, // Only run query if we don't already have user from Kinde client
   })
-
   useEffect(() => {
     if (data?.success) {
       if (configId) {
         localStorage.removeItem('configurationId')
+        console.log('Redirecting to preview with configId:', configId)
         router.push(`/configure/preview?id=${configId}`)
       } else {
+        console.log('No configId found, redirecting to home')
         router.push('/')
       }
     }

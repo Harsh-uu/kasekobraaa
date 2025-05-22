@@ -8,6 +8,7 @@ const publicPaths = [
   '/api/auth/register',
   '/api/auth/logout',
   '/api/auth/[kindeAuth]',
+  '/api/auth/kinde_callback',
   '/auth-callback',
   '/configure/upload',
   '/configure/design',
@@ -22,7 +23,12 @@ const isPublicPath = (path: string) => {
   if (publicPaths.includes(path)) return true;
   
   // API routes that should be public
-  if (path.startsWith('/api/uploadthing') || path.startsWith('/api/webhooks')) {
+  if (
+    path.startsWith('/api/uploadthing') || 
+    path.startsWith('/api/webhooks') ||
+    path.startsWith('/api/auth/kinde_callback') ||
+    path.includes('kinde_callback')
+  ) {
     return true;
   }
   
@@ -65,7 +71,8 @@ export const config = {
      * - public files (.ico, .svg, .png, .jpg, .jpeg)
      * - api/uploadthing (UploadThing API routes)
      * - api/webhooks (Webhook endpoints)
+     * - api/auth (Auth API routes including Kinde callbacks)
      */
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.ico|.*\\.svg|.*\\.png|.*\\.jpg|.*\\.jpeg|api/uploadthing|api/webhooks).*)',
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.ico|.*\\.svg|.*\\.png|.*\\.jpg|.*\\.jpeg|api/uploadthing|api/webhooks|api/auth/kinde_callback).*)',
   ],
 };

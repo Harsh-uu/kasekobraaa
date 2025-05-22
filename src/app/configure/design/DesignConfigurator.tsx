@@ -93,21 +93,31 @@ const DesignConfigurator = ({
     console.log("Image URL:", imageUrl);
     console.log("Processed URL:", processedImageUrl);
   }, [imageUrl, processedImageUrl]);
-
   const {mutate: saveConfig, isPending} = useMutation({
     mutationKey: ["save-config"],
     mutationFn: async (args: SaveConfigArgs) => {
-      await Promise.all([saveConfiguration(), _saveConfig(args)])
+      // First save the configuration to the database
+      await _saveConfig(args);
+      
+      // Then process the image
+      try {
+        await saveConfiguration();
+      } catch (error) {
+        console.error("Error saving image configuration:", error);
+        // Continue with redirect even if image processing fails
+      }
     },
-    onError: () => {
+    onError: (error) => {
+      console.error("Save config error:", error);
       toast({
         title: "Something went wrong",
         description: "There was an error on our end. Please try again.",
         variant: "destructive"
-      })
+      });
     },
     onSuccess: () => {
-      router.push(`/configure/preview?id=${configId}`)
+      console.log("Configuration saved successfully, redirecting to preview");
+      router.push(`/configure/preview?id=${configId}`);
     }
   })
 
@@ -136,18 +146,22 @@ const DesignConfigurator = ({
   const phoneCaseRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const { startUpload } = useUploadThing("imageUploader");
-  async function saveConfiguration() {
+  const { startUpload } = useUploadThing("imageUploader");  async function saveConfiguration() {
     try {
+      if (!phoneCaseRef.current || !containerRef.current) {
+        console.error("DOM references not available");
+        throw new Error("DOM references not available");
+      }
+
       const {
         left: caseLeft,
         top: caseTop,
         width,
         height,
-      } = phoneCaseRef.current!.getBoundingClientRect();
+      } = phoneCaseRef.current.getBoundingClientRect();
 
       const { left: containerLeft, top: containerTop } =
-        containerRef.current!.getBoundingClientRect();
+        containerRef.current.getBoundingClientRect();
 
       const leftOffset = caseLeft - containerLeft;
       const topOffset = caseTop - containerTop;
@@ -158,19 +172,38 @@ const DesignConfigurator = ({
       const canvas = document.createElement("canvas");
       canvas.width = width;
       canvas.height = height;
-      const ctx = canvas.getContext("2d");      const userImage = new Image();
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        console.error("Failed to get canvas context");
+        throw new Error("Failed to get canvas context");
+      }      const userImage = new Image();
       userImage.crossOrigin = "anonymous";
       userImage.src = processedImageUrl;
       
       console.log("Loading image from URL:", processedImageUrl);
       
-      await new Promise((resolve, reject) => {
-        userImage.onload = resolve;
-        userImage.onerror = (e) => {
-          console.error("Error loading image:", e);
-          reject(new Error("Failed to load image"));
-        };
-      });
+      try {
+        await new Promise((resolve, reject) => {
+          userImage.onload = resolve;
+          userImage.onerror = (e) => {
+            console.error("Error loading image:", e);
+            reject(new Error("Failed to load image"));
+          };
+          
+          // Set a timeout in case the image hangs
+          const timeout = setTimeout(() => {
+            reject(new Error("Image loading timed out"));
+          }, 10000); // 10 second timeout
+          
+          userImage.onload = () => {
+            clearTimeout(timeout);
+            resolve(null);
+          };
+        });
+      } catch (error) {
+        console.error("Image loading failed:", error);
+        throw error;
+      }
 
       ctx?.drawImage(
         userImage,
@@ -455,18 +488,25 @@ const DesignConfigurator = ({
                   (BASE_PRICE + options.finish.price + options.material.price) /
                     100
                 )}
-              </p>
-              <Button
+              </p>              <Button
               isLoading={isPending} 
               disabled={isPending}
               loadingText="Saving"
-              onClick={() => saveConfig({
-                configId,
-                color: options.color.value,
-                finish: options.finish.value,
-                material: options.material.value,
-                model: options.model.value
-              })} size="sm" className="w-full">
+              onClick={() => {
+                console.log("Continue button clicked, saving configuration");
+                // Create a backup of the configuration ID for recovery if needed
+                localStorage.setItem("lastConfigId", configId);
+                
+                saveConfig({
+                  configId,
+                  color: options.color.value,
+                  finish: options.finish.value,
+                  material: options.material.value,
+                  model: options.model.value
+                });
+              }} 
+              size="sm" 
+              className="w-full">
                 Continue
                 <ArrowRight className="h-4 w-4 ml-1.5 inline" />
               </Button>

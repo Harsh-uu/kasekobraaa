@@ -2,27 +2,46 @@
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { isUploadThingUrl } from "@/lib/image-utils";
+import { getCorsProxyUrl, isUploadThingUrl, preloadImage } from "@/lib/image-utils";
+import { logger } from "@/lib/logger";
+import { useKindeBrowserClient } from "@kinde-oss/kinde-auth-nextjs";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 // Component that uses useSearchParams
 function DiagnosticContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const { user, isLoading: isAuthLoading } = useKindeBrowserClient();
   
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [loadStatus, setLoadStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [debugInfo, setDebugInfo] = useState<Record<string, any>>({});
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);  const [debugInfo, setDebugInfo] = useState<Record<string, any>>({});
+  const [authData, setAuthData] = useState<any>(null);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(false);
 
+  // Load image test from URL parameter
   useEffect(() => {
     const url = searchParams.get('url');
     if (url) {
       setImageUrl(url);
       testImageLoading(url);
     }
-  }, [searchParams]);
+    
+    // Set initial auth data
+    setDebugInfo(prev => ({
+      ...prev,
+      auth: {
+        isLoading: isAuthLoading,
+        user: user ? {
+          id: user.id,
+          email: user.email,
+          name: `${user.given_name || ''} ${user.family_name || ''}`.trim(),
+        } : null,
+      }
+    }));
+  }, [searchParams, user, isAuthLoading]);
 
   const testImageLoading = (url: string) => {
     setLoadStatus('loading');
@@ -52,15 +71,69 @@ function DiagnosticContent() {
     
     img.onerror = (e) => {
       setLoadStatus('error');
-      setErrorMessage(`Failed to load image: ${e}`);
+      setErrorMessage('Image failed to load');
+      console.error('Image loading failed:', e);
+      
       setDebugInfo(prev => ({
         ...prev,
-        error: String(e),
-        errorAt: new Date().toISOString(),
+        errorTime: new Date().toISOString(),
+        errorType: 'Image load failure',
       }));
+      
+      // Try with CORS proxy as a fallback
+      testFallbackImage(url);
     };
     
     img.src = url;
+  };
+  
+  const testFallbackImage = (url: string) => {
+    logger.info('Testing fallback image loading', { source: 'diagnostics', meta: { url } });
+    
+    const corsUrl = getCorsProxyUrl(url);
+    if (corsUrl === url) {
+      // No CORS proxy available or needed
+      return;
+    }
+    
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    
+    img.onload = () => {
+      setLoadStatus('success');
+      setDebugInfo(prev => ({
+        ...prev,
+        fallbackSuccess: true,
+        corsUrl,
+        dimensions: `${img.width}x${img.height}`,
+        loadedAt: new Date().toISOString(),
+      }));
+    };
+    
+    img.onerror = () => {
+      setDebugInfo(prev => ({
+        ...prev,
+        fallbackSuccess: false,
+        corsUrl,
+      }));
+    };
+    
+    img.src = corsUrl;
+  };
+  
+  const checkAuthApi = async () => {
+    setIsCheckingAuth(true);
+    try {
+      const response = await fetch('/api/diagnostics');
+      const data = await response.json();
+      setAuthData(data);
+      logger.info('Auth diagnostic data', { source: 'diagnostics', meta: { authenticated: data.authenticated } });
+    } catch (error) {
+      logger.error('Error checking auth API', { source: 'diagnostics', meta: { error } });
+      setAuthData({ error: error instanceof Error ? error.message : 'Unknown error' });
+    } finally {
+      setIsCheckingAuth(false);
+    }
   };
 
   return (
