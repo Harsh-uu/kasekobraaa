@@ -1,35 +1,41 @@
 "use client";
 
 import Phone from "@/components/Phone";
+import UTImage from "@/components/UTImage";
 import { Button } from "@/components/ui/button";
 import { BASE_PRICE, PRODUCT_PRICES } from "@/config/products";
 import { cn, formatPrice } from "@/lib/utils";
 import { COLORS, MODELS } from "@/validators/option-validator";
 import { Configuration } from "@prisma/client";
 import { useMutation } from "@tanstack/react-query";
-import { ArrowRight, Check, Loader2 } from "lucide-react";
-import { Suspense, useCallback, useEffect, useState } from "react";
-import dynamic from "next/dynamic";
+import { ArrowRight, Check } from "lucide-react";
+import { useEffect, useState } from "react";
+import Confetti from "react-dom-confetti";
 import { createCheckoutSession } from "./actions";
 import { useRouter } from "next/navigation";
 import { useKindeBrowserClient } from "@kinde-oss/kinde-auth-nextjs";
 import LoginModal from "@/components/LoginModal";
 import { useToast } from "@/hooks/use-toast";
-import useIsClient from "@/hooks/use-is-client";
-
-// Dynamically import Confetti with no SSR to avoid hydration issues
-const Confetti = dynamic(() => import("react-dom-confetti"), {
-  ssr: false,
-});
 
 const DesignPreview = ({ configuration }: { configuration: Configuration }) => {
   const router = useRouter();
   const { toast } = useToast();
-  const { id } = configuration;  
-  const { user, isLoading: isAuthLoading } = useKindeBrowserClient();
+  const { id } = configuration;  const { user, isLoading: isAuthLoading } = useKindeBrowserClient();
   const [isLoginModalOpen, setIsLoginModalOpen] = useState<boolean>(false);
+  const [authDebug, setAuthDebug] = useState<string>('');
+
   const [showConfetti, setShowConfetti] = useState<boolean>(false);
-  const isClient = useIsClient();
+  useEffect(() => {
+    setShowConfetti(true);
+    // Debug auth state
+    console.log('Auth state:', { user, isAuthLoading });
+    setAuthDebug(JSON.stringify({ 
+      isAuthenticated: !!user, 
+      userId: user?.id,
+      email: user?.email,
+      isLoading: isAuthLoading 
+    }, null, 2));
+  }, [user, isAuthLoading]);
 
   const { color, model, finish, material } = configuration;
 
@@ -46,15 +52,9 @@ const DesignPreview = ({ configuration }: { configuration: Configuration }) => {
     totalPrice += PRODUCT_PRICES.material.polycarbonate;
   if (finish === "textured") totalPrice += PRODUCT_PRICES.finish.textured;
 
-  // Memoized checkout mutation
-  const { mutateAsync: createPaymentSession, status: checkoutStatus } = useMutation({
+  const { mutate: createPaymentSession } = useMutation({
+    mutationKey: ["get-checkout-session"],
     mutationFn: createCheckoutSession,
-    onMutate: () => {
-      toast({
-        title: "Processing your order",
-        description: "Please wait while we create your checkout session...",
-      });
-    },
     onSuccess: ({ url }) => {
       if (url) router.push(url);
       else throw new Error("Unable to retrieve payment URL.");
@@ -67,16 +67,9 @@ const DesignPreview = ({ configuration }: { configuration: Configuration }) => {
       });
     },
   });
-
-  useEffect(() => {
-    if (isClient) {
-      setShowConfetti(true);
-      const timer = setTimeout(() => setShowConfetti(false), 4000);
-      return () => clearTimeout(timer);
-    }
-  }, [isClient]);
-
-  const handleCheckout = useCallback(async () => {
+  const handleCheckout = async () => {
+    console.log('Checkout clicked, auth state:', { user, isAuthLoading });
+    
     if (isAuthLoading) {
       toast({
         title: "Please wait",
@@ -87,15 +80,19 @@ const DesignPreview = ({ configuration }: { configuration: Configuration }) => {
     }
     
     if (user) {
-      await createPaymentSession({ configId: id });
+      // User is authenticated, create payment session
+      toast({
+        title: "Processing",
+        description: "Creating your checkout session...",
+      });
+      createPaymentSession({ configId: id });
     } else {
+      // User needs to log in
+      console.log('User not authenticated, opening login modal');
       localStorage.setItem("configurationId", id);
       setIsLoginModalOpen(true);
     }
-  }, [user, isAuthLoading, id, createPaymentSession, toast]);
-  if (!isClient) return null;
-
-  const isCheckoutLoading = checkoutStatus === 'pending';
+  };
 
   return (
     <>
@@ -105,25 +102,29 @@ const DesignPreview = ({ configuration }: { configuration: Configuration }) => {
       >
         <Confetti
           active={showConfetti}
-          config={{ elementCount: 150, spread: 90 }}
+          config={{ elementCount: 200, spread: 90 }}
         />
-      </div>
+      </div>      <LoginModal isOpen={isLoginModalOpen} setIsOpen={setIsLoginModalOpen} />
 
-      <LoginModal isOpen={isLoginModalOpen} setIsOpen={setIsLoginModalOpen} />
+      {process.env.NODE_ENV === "development" && (
+        <div className="fixed top-20 right-4 bg-gray-100 p-4 rounded-md shadow-md z-50 max-w-xs overflow-auto text-xs">
+          <h4 className="font-bold mb-2">Auth Debug:</h4>
+          <pre>{authDebug}</pre>
+        </div>
+      )}
 
-      <div className="mt-20 flex flex-col items-center md:grid text-sm sm:grid-cols-12 sm:grid-rows-1 sm:gap-x-6 md:gap-x-8 lg:gap-x-12">
-        <Suspense fallback={
-          <div className="flex h-[300px] w-full items-center justify-center">
-            <Loader2 className="h-8 w-8 animate-spin text-zinc-500" />
-          </div>
-        }>
-          <div className="md:col-span-4 lg:col-span-3 md:row-span-2 md:row-end-2">
-            <Phone
-              className={cn(`bg-${tw}`, "max-w-[150px] md:max-w-full")}
-              imgSrc={configuration.croppedImageUrl || ''}
-            />
-          </div>
-        </Suspense>
+      <div className="mt-20 flex flex-col items-center md:grid text-sm sm:grid-cols-12 sm:grid-rows-1 sm:gap-x-6 md:gap-x-8 lg:gap-x-12">        <div className="md:col-span-4 lg:col-span-3 md:row-span-2 md:row-end-2">
+          <Phone
+            className={cn(`bg-${tw}`, "max-w-[150px] md:max-w-full")}
+            imgSrc={configuration.croppedImageUrl || ''}
+          />
+          {/* Debug info for image in production */}
+          {process.env.NODE_ENV === "development" && (
+            <div className="mt-2 text-xs bg-gray-50 p-2 rounded">
+              <div>Image URL: {configuration.croppedImageUrl?.substring(0, 30)}...</div>
+            </div>
+          )}
+        </div>
 
         <div className="mt-6 sm:col-span-9 md:row-end-1">
           <h3 className="text-3xl font-bold tracking-tight text-gray-900">
@@ -196,20 +197,10 @@ const DesignPreview = ({ configuration }: { configuration: Configuration }) => {
 
             <div className="mt-8 flex justify-end pb-12">
               <Button
-                onClick={handleCheckout}
-                disabled={isCheckoutLoading || isAuthLoading}
+                onClick={() => handleCheckout()}
                 className="px-4 sm:px-6 lg:px-8"
               >
-                {isCheckoutLoading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Processing...
-                  </>
-                ) : (
-                  <>
-                    Check out <ArrowRight className="h-4 w-4 ml-1.5 inline" />
-                  </>
-                )}
+                Check out <ArrowRight className="h-4 w-4 ml-1.5 inline" />
               </Button>
             </div>
           </div>

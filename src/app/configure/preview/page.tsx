@@ -1,7 +1,6 @@
 import { db } from '@/db'
 import { notFound } from 'next/navigation'
-import { Suspense } from 'react'
-import PreviewBody from './PreviewBody'
+import DesignPreview from './DesignPreview'
 
 interface PageProps {
   searchParams: Promise<{
@@ -10,8 +9,8 @@ interface PageProps {
 }
 
 const Page = async ({ searchParams }: PageProps) => {
-  const params = await searchParams;
-  const { id } = params;
+  const params=await searchParams;
+    const { id } =  params;
 
   if (!id || typeof id !== 'string') {
     return notFound()
@@ -25,18 +24,7 @@ const Page = async ({ searchParams }: PageProps) => {
     return notFound()
   }
 
-  return (
-    <Suspense fallback={
-      <div className="flex h-[60vh] w-full items-center justify-center">
-        <div className="flex flex-col items-center gap-2">
-          <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-zinc-800" />
-          <p className="text-sm text-zinc-500">Loading preview...</p>
-        </div>
-      </div>
-    }>
-      <PreviewBody configuration={configuration} />
-    </Suspense>
-  )
+  return <DesignPreview configuration={configuration} />
 }
 
 export default Page

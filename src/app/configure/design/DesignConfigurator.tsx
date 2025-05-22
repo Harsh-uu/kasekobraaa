@@ -498,6 +498,9 @@ const DesignConfigurator = ({
                 console.log("Continue button clicked, saving configuration");
                 // Create a backup of the configuration ID for recovery if needed
                 localStorage.setItem("lastConfigId", configId);
+                sessionStorage.setItem("lastConfigId", configId);
+                localStorage.setItem("configurationId", configId);
+                sessionStorage.setItem("configurationId", configId);
                 
                 try {
                   saveConfig({
